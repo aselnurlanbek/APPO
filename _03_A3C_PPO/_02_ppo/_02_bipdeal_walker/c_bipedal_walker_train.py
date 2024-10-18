@@ -15,7 +15,7 @@ from torch.distributions import Normal
 from torch.optim import Adam
 
 from a_shared_adam import SharedAdam
-from b_actor_and_critic import MODEL_DIR, Actor, Buffer, Critic, Transition
+from b_bipedal_walker_actor_and_critic import MODEL_DIR, Actor, Buffer, Critic, Transition
 
 
 def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
@@ -479,4 +479,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    mp.set_start_method("spawn")
     main()
