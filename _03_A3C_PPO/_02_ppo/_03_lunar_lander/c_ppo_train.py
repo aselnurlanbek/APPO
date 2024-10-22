@@ -83,9 +83,13 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     self.shared_stat.global_episodes.value > self.last_global_episode_wandb_log,
                     self.shared_stat.global_episodes.value > self.train_num_episodes_before_next_validation,
                 ]
+                print("validation_conditions", all(validation_conditions))
+                print("wandb_log_conditions", all(wandb_log_conditions))
+                print()
                 if all(wandb_log_conditions):
                     self.log_wandb(validation_episode_reward_avg)
                     self.last_global_episode_wandb_log = self.shared_stat.global_episodes.value
+                    exit()
 
                 if bool(self.shared_stat.is_terminated.value):
                     if self.wandb:
@@ -292,7 +296,7 @@ def worker_loop(
 
             old_mu, old_std = self.local_actor.forward(observations)
             old_dist = Normal(old_mu, old_std)
-            old_action_log_probs = old_dist.log_prob(value=actions).squeeze(dim=-1)
+            old_action_log_probs = old_dist.log_prob(value=actions).sum(dim=-1)
 
             for _ in range(self.ppo_epochs):
                 values = self.local_critic(observations).squeeze(dim=-1)
@@ -307,7 +311,7 @@ def worker_loop(
                 # Actor Loss computing
                 mu, std = self.local_actor.forward(observations)
                 dist = Normal(mu, std)
-                action_log_probs = dist.log_prob(value=actions).squeeze(dim=-1)
+                action_log_probs = dist.log_prob(value=actions).sum(dim=-1)
 
                 ratio = torch.exp(action_log_probs - old_action_log_probs.detach())
 
@@ -396,7 +400,7 @@ class PPO:
         self.num_workers = min(config["num_workers"], mp.cpu_count() - 1)
 
         # Initialize global models and optimizers
-        self.global_actor = Actor(n_features=8, n_actions=4).share_memory()
+        self.global_actor = Actor(n_features=8, n_actions=2).share_memory()
         self.global_critic = Critic(n_features=8).share_memory()
 
         self.global_actor_optimizer = SharedAdam(self.global_actor.parameters(), lr=config["learning_rate"])
@@ -454,7 +458,7 @@ class PPO:
 
 def main() -> None:
     print("TORCH VERSION:", torch.__version__)
-    ENV_NAME = "LunarLander-v2"
+    ENV_NAME = "LunarLanderContinuous-v2"
 
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름

@@ -16,7 +16,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
-    def __init__(self, n_features: int = 8, n_actions: int = 4):
+    def __init__(self, n_features: int = 8, n_actions: int = 2):
         super().__init__()
         self.fc1 = nn.Linear(n_features, 128)
         self.fc2 = nn.Linear(128, 128)
@@ -32,10 +32,10 @@ class Actor(nn.Module):
             x = torch.tensor(x, dtype=torch.float32, device=DEVICE)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        mu_v = self.mu(x)
+        mu_v = F.tanh(self.mu(x))
 
         std_v = self.log_std.exp()
-        std_v = torch.clamp(std_v, min=1e-6, max=1.0)  # Clamping for numerical stability
+        std_v = torch.clamp(std_v, min=2.0, max=50)  # Clamping for numerical stability
 
         return mu_v, std_v
 
@@ -45,10 +45,11 @@ class Actor(nn.Module):
         if exploration:
             dist = Normal(loc=mu_v, scale=std_v)
             action = dist.sample()
-            action = torch.tanh(action).detach().cpu().numpy()
         else:
-            action = torch.tanh(mu_v).detach().cpu().numpy()
+            action = mu_v
 
+        # Clip the actions to ensure they are within the desired range
+        action = torch.clamp(action, min=-1.0, max=1.0).detach().cpu().numpy()
         return action
 
 
