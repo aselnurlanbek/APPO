@@ -240,3 +240,4 @@ fabric.properties
 **/wandb
 **/models
 .idea
+**/csv
