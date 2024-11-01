@@ -20,14 +20,14 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
-    def __init__(self, n_features: int = 8, n_actions: int = 2):
+    def __init__(self, n_features: int = 111, n_actions: int = 8):
         super().__init__()
-        self.fc1 = nn.Linear(n_features, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.mu = nn.Linear(128, n_actions)
+        self.fc1 = nn.Linear(n_features, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.mu = nn.Linear(256, n_actions)
 
         # ln_e(x) = 1.0 --> x = e^1.0 = 2.71
-        log_std_param = nn.Parameter(torch.full((n_actions,), 1.0))
+        log_std_param = nn.Parameter(torch.full((n_actions,), -0.5))
         self.register_parameter("log_std", log_std_param)
         self.to(DEVICE)
 
@@ -39,7 +39,7 @@ class Actor(nn.Module):
         mu_v = F.tanh(self.mu(x))
 
         std_v = self.log_std.exp()
-        std_v = torch.clamp(std_v, min=2.0, max=50)  # Clamping for numerical stability
+        std_v = torch.clamp(std_v, min=0.1, max=2.0)  # Clamping for numerical stability
 
         return mu_v, std_v
 
@@ -63,11 +63,11 @@ class Critic(nn.Module):
     update. This a Neural Net with 1 hidden layer
     """
 
-    def __init__(self, n_features: int = 8):
+    def __init__(self, n_features: int = 111):
         super().__init__()
-        self.fc1 = nn.Linear(n_features, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(n_features, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if isinstance(x, np.ndarray):

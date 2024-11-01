@@ -45,7 +45,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.last_global_episode_wandb_log = 0
 
             # CSV setup
-            csv_filename = "ppo_{0}_{1}_workers_{2}.csv".format(
+            csv_filename = "appo_{0}_{1}_workers_{2}.csv".format(
                 self.env_name, self.current_time, config["num_workers"]
             )
             self.csv_filepath = os.path.join(CSV_DIR, csv_filename)
@@ -184,11 +184,11 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.csv_file.flush()
 
         def model_save(self, validation_episode_reward_avg: float) -> None:
-            filename = "ppo_{0}_{1:4.1f}_{2}.pth".format(self.env_name, validation_episode_reward_avg, self.current_time)
+            filename = "appo_{0}_{1:4.1f}_{2}.pth".format(self.env_name, validation_episode_reward_avg, self.current_time)
             torch.save(self.global_actor.state_dict(), os.path.join(MODEL_DIR, filename))
 
             copyfile(
-                src=os.path.join(MODEL_DIR, filename), dst=os.path.join(MODEL_DIR, "ppo_{0}_latest.pth".format(self.env_name))
+                src=os.path.join(MODEL_DIR, filename), dst=os.path.join(MODEL_DIR, "appo_{0}_latest.pth".format(self.env_name))
             )
 
     master = PPOMaster(
@@ -449,8 +449,8 @@ class PPO:
         self.num_workers = min(config["num_workers"], mp.cpu_count() - 1)
 
         # Initialize global models and optimizers
-        self.global_actor = Actor(n_features=8, n_actions=2).share_memory()
-        self.global_critic = Critic(n_features=8).share_memory()
+        self.global_actor = Actor(n_features=111, n_actions=8).share_memory()
+        self.global_critic = Critic(n_features=111).share_memory()
 
         self.global_actor_optimizer = SharedAdam(self.global_actor.parameters(), lr=config["learning_rate"])
         self.global_critic_optimizer = SharedAdam(self.global_critic.parameters(), lr=config["learning_rate"])
@@ -460,7 +460,7 @@ class PPO:
 
         if use_wandb:
             current_time = datetime.now().astimezone().strftime("%Y-%m-%d_%H-%M-%S")
-            self.wandb = wandb.init(project="PPO_{0}".format(config["env_name"]), name=current_time, config=config)
+            self.wandb = wandb.init(project="APPO_{0}".format(config["env_name"]), name=current_time, config=config)
         else:
             self.wandb = None
 
@@ -507,22 +507,22 @@ class PPO:
 
 def main() -> None:
     print("TORCH VERSION:", torch.__version__)
-    ENV_NAME = "LunarLanderContinuous-v2"
+    ENV_NAME = "Ant-v4"
 
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름
-        "num_workers": 8,                                   # 동시 수행 Worker Process 수
+        "num_workers": 1,                                   # 동시 수행 Worker Process 수
         "max_num_episodes": 200_000,                        # 훈련을 위한 최대 에피소드 횟수
         "ppo_epochs": 10,                                   # PPO 내부 업데이트 횟수
         "ppo_clip_coefficient": 0.2,                        # PPO Ratio Clip Coefficient
-        "batch_size": 128,                                  # 훈련시 배치에서 한번에 가져오는 랜덤 배치 사이즈
-        "learning_rate": 0.0001,                            # 학습율
+        "batch_size": 256,                                  # 훈련시 배치에서 한번에 가져오는 랜덤 배치 사이즈
+        "learning_rate": 0.0003,                            # 학습율
         "gamma": 0.99,                                      # 감가율
-        "entropy_beta": 0.03,                               # 엔트로피 가중치
+        "entropy_beta": 0.01,                               # 엔트로피 가중치
         "print_episode_interval": 10,                       # Episode 통계 출력에 관한 에피소드 간격
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
-        "episode_reward_avg_solved": 200,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
+        "episode_reward_avg_solved": 6000,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
     }
 
     use_wandb = True

@@ -7,13 +7,13 @@ import os
 from b_actor_and_critic import CSV_DIR
 
 # Fetch all CSV files matching the pattern
-csv_files = glob.glob(f"{CSV_DIR}/ppo_LunarLanderContinuous-v2_*_workers_*.csv")
+csv_files = glob.glob(f"{CSV_DIR}/appo_Ant-v4_*_workers_*.csv")
 
 # Prepare a dictionary to store data for each worker
 worker_data = {}
 
 # Regular expression to extract the worker number and environment name
-worker_pattern = re.compile(r"ppo_(.*)_.*_workers_(\d+).csv$")
+worker_pattern = re.compile(r"appo_(.*)_.*_workers_(\d+).csv$")
 
 # Extract environment name (assumes all files have the same env)
 env_name = None
