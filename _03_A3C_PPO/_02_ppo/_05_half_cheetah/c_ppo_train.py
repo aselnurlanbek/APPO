@@ -205,7 +205,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 def worker_loop(
         process_id, global_actor, global_critic, global_actor_optimizer, global_critic_optimizer, shared_stat, global_lock, config):
     env_name = config["env_name"]
-    env = gym.make(env_name)
+    env = gym.make(env_name, render_mode="rgb_array")
 
     class PPOAgent:
         def __init__(
@@ -515,10 +515,10 @@ def main() -> None:
         "max_num_episodes": 200_000,                        # 훈련을 위한 최대 에피소드 횟수
         "ppo_epochs": 10,                                   # PPO 내부 업데이트 횟수
         "ppo_clip_coefficient": 0.2,                        # PPO Ratio Clip Coefficient
-        "batch_size": 128,                                  # 훈련시 배치에서 한번에 가져오는 랜덤 배치 사이즈
-        "learning_rate": 0.0001,                            # 학습율
+        "batch_size": 256,                                  # 훈련시 배치에서 한번에 가져오는 랜덤 배치 사이즈
+        "learning_rate": 0.0003,                            # 학습율
         "gamma": 0.99,                                      # 감가율
-        "entropy_beta": 0.03,                               # 엔트로피 가중치
+        "entropy_beta": 0.01,                               # 엔트로피 가중치
         "print_episode_interval": 10,                       # Episode 통계 출력에 관한 에피소드 간격
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
