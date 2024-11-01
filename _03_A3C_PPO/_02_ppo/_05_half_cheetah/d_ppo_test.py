@@ -1,4 +1,4 @@
-# https://gymnasium.farama.org/environments/box2d/lunar_lander/
+# https://gymnasium.farama.org/environments/mujoco/half_cheetah/
 import os
 
 import gymnasium as gym

@@ -1,4 +1,4 @@
-# https://gymnasium.farama.org/environments/mujoco/ant/
+# https://gymnasium.farama.org/environments/mujoco/hopper/
 import os
 
 import gymnasium as gym
@@ -33,7 +33,7 @@ def test(env: gym.Env, actor: Actor, num_episodes: int) -> None:
 def main_play(num_episodes: int, env_name: gym.Env) -> None:
     env = gym.make(env_name, render_mode="human")
 
-    actor = Actor(n_features=111, n_actions=8)
+    actor = Actor(n_features=11, n_actions=3)
     model_params = torch.load(os.path.join(MODEL_DIR, "appo_{0}_latest.pth".format(env_name)), weights_only=True)
     actor.load_state_dict(model_params)
     actor.eval()
@@ -45,6 +45,6 @@ def main_play(num_episodes: int, env_name: gym.Env) -> None:
 
 if __name__ == "__main__":
     NUM_EPISODES = 3
-    ENV_NAME = "Ant-v4"
+    ENV_NAME = "Hopper-v4"
 
     main_play(num_episodes=NUM_EPISODES, env_name=ENV_NAME)

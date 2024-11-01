@@ -1,4 +1,4 @@
-# https://gymnasium.farama.org/environments/box2d/lunar_lander/
+# https://gymnasium.farama.org/environments/mujoco/ant/
 import copy
 import os
 import time

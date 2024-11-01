@@ -1,4 +1,4 @@
-# https://gymnasium.farama.org/environments/mujoco/half_cheetah/
+# https://gymnasium.farama.org/environments/mujoco/hopper/
 import copy
 import os
 import time
@@ -60,7 +60,6 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             ])
 
         def validate_loop(self):
-            validation_episode_reward_avg = None
             total_train_start_time = time.time()
 
             while True:
@@ -100,20 +99,15 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     self.shared_stat.global_episodes.value > self.last_global_episode_wandb_log,
                     self.shared_stat.global_episodes.value > self.train_num_episodes_before_next_validation,
                 ]
-                # print("validation_conditions", all(validation_conditions))
-                # print("wandb_log_conditions", all(wandb_log_conditions))
-
                 if all(wandb_log_conditions):
-                    if validation_episode_reward_avg is not None:
-                        self.log_wandb(validation_episode_reward_avg)
-                    # self.log_wandb(validation_episode_reward_avg)
+                    self.log_wandb(validation_episode_reward_avg)
                     self.last_global_episode_wandb_log = self.shared_stat.global_episodes.value
 
                 if bool(self.shared_stat.is_terminated.value):
                     if self.wandb:
                         for _ in range(5):
                             self.log_wandb(validation_episode_reward_avg)
-                    self.csv_file.close() # Close CSV file
+                    self.csv_file.close()
                     break
 
         def validate(self) -> tuple[np.ndarray, float]:
@@ -127,7 +121,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
                 while not done:
                     action = self.global_actor.get_action(observation, exploration=False)
-                    next_observation, reward, terminated, truncated, _ = self.test_env.step(action)
+                    next_observation, reward, terminated, truncated, _ = self.test_env.step(action * 2)
                     episode_reward += reward
                     observation = next_observation
                     done = terminated or truncated
@@ -150,7 +144,6 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                 "Training Episode": self.shared_stat.global_episodes.value,
                 "Training Steps": self.shared_stat.global_training_time_steps.value,
             }
-
             # self.wandb.log(
             #     {
             #         "[VALIDATION] Mean Episode Reward ({0} Episodes)".format(
@@ -274,7 +267,7 @@ def worker_loop(
                     self.shared_stat.global_time_steps.value += 1
 
                     action = self.local_actor.get_action(observation)
-                    next_observation, reward, terminated, truncated, _ = self.env.step(action)
+                    next_observation, reward, terminated, truncated, _ = self.env.step(action * 2)
 
                     episode_reward += reward
 
@@ -345,7 +338,7 @@ def worker_loop(
 
             old_mu, old_std = self.local_actor.forward(observations)
             old_dist = Normal(old_mu, old_std)
-            old_action_log_probs = old_dist.log_prob(value=actions).sum(dim=-1)
+            old_action_log_probs = old_dist.log_prob(value=actions).squeeze(dim=-1)
 
             for _ in range(self.ppo_epochs):
                 values = self.local_critic(observations).squeeze(dim=-1)
@@ -360,7 +353,7 @@ def worker_loop(
                 # Actor Loss computing
                 mu, std = self.local_actor.forward(observations)
                 dist = Normal(mu, std)
-                action_log_probs = dist.log_prob(value=actions).sum(dim=-1)
+                action_log_probs = dist.log_prob(value=actions).squeeze(dim=-1)
 
                 ratio = torch.exp(action_log_probs - old_action_log_probs.detach())
 
@@ -449,8 +442,8 @@ class PPO:
         self.num_workers = min(config["num_workers"], mp.cpu_count() - 1)
 
         # Initialize global models and optimizers
-        self.global_actor = Actor(n_features=17, n_actions=6).share_memory()
-        self.global_critic = Critic(n_features=17).share_memory()
+        self.global_actor = Actor(n_features=11, n_actions=3).share_memory()
+        self.global_critic = Critic(n_features=11).share_memory()
 
         self.global_actor_optimizer = SharedAdam(self.global_actor.parameters(), lr=config["learning_rate"])
         self.global_critic_optimizer = SharedAdam(self.global_critic.parameters(), lr=config["learning_rate"])
@@ -507,7 +500,7 @@ class PPO:
 
 def main() -> None:
     print("TORCH VERSION:", torch.__version__)
-    ENV_NAME = "HalfCheetah-v4"
+    ENV_NAME = "Hopper-v4"
 
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름
@@ -518,11 +511,11 @@ def main() -> None:
         "batch_size": 256,                                  # 훈련시 배치에서 한번에 가져오는 랜덤 배치 사이즈
         "learning_rate": 0.0003,                            # 학습율
         "gamma": 0.99,                                      # 감가율
-        "entropy_beta": 0.01,                               # 엔트로피 가중치
-        "print_episode_interval": 10,                       # Episode 통계 출력에 관한 에피소드 간격
+        "entropy_beta": 0.03,                               # 엔트로피 가중치
+        "print_episode_interval": 20,                       # Episode 통계 출력에 관한 에피소드 간격
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
-        "episode_reward_avg_solved": 3000,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
+        "episode_reward_avg_solved": 3800,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
     }
 
     use_wandb = True
