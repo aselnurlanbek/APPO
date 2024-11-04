@@ -60,6 +60,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             ])
 
         def validate_loop(self):
+            validation_episode_reward_avg = None
             total_train_start_time = time.time()
 
             while True:
@@ -100,7 +101,9 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     self.shared_stat.global_episodes.value > self.train_num_episodes_before_next_validation,
                 ]
                 if all(wandb_log_conditions):
-                    self.log_wandb(validation_episode_reward_avg)
+                    if validation_episode_reward_avg is not None:
+                        self.log_wandb(validation_episode_reward_avg)
+                    # self.log_wandb(validation_episode_reward_avg)
                     self.last_global_episode_wandb_log = self.shared_stat.global_episodes.value
 
                 if bool(self.shared_stat.is_terminated.value):
@@ -121,7 +124,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
                 while not done:
                     action = self.global_actor.get_action(observation, exploration=False)
-                    next_observation, reward, terminated, truncated, _ = self.test_env.step(action * 2)
+                    next_observation, reward, terminated, truncated, _ = self.test_env.step(action)
                     episode_reward += reward
                     observation = next_observation
                     done = terminated or truncated
@@ -267,7 +270,7 @@ def worker_loop(
                     self.shared_stat.global_time_steps.value += 1
 
                     action = self.local_actor.get_action(observation)
-                    next_observation, reward, terminated, truncated, _ = self.env.step(action * 2)
+                    next_observation, reward, terminated, truncated, _ = self.env.step(action)
 
                     episode_reward += reward
 
@@ -338,7 +341,7 @@ def worker_loop(
 
             old_mu, old_std = self.local_actor.forward(observations)
             old_dist = Normal(old_mu, old_std)
-            old_action_log_probs = old_dist.log_prob(value=actions).squeeze(dim=-1)
+            old_action_log_probs = old_dist.log_prob(value=actions).sum(dim=-1)
 
             for _ in range(self.ppo_epochs):
                 values = self.local_critic(observations).squeeze(dim=-1)
@@ -353,7 +356,7 @@ def worker_loop(
                 # Actor Loss computing
                 mu, std = self.local_actor.forward(observations)
                 dist = Normal(mu, std)
-                action_log_probs = dist.log_prob(value=actions).squeeze(dim=-1)
+                action_log_probs = dist.log_prob(value=actions).sum(dim=-1)
 
                 ratio = torch.exp(action_log_probs - old_action_log_probs.detach())
 
@@ -500,7 +503,7 @@ class PPO:
 
 def main() -> None:
     print("TORCH VERSION:", torch.__version__)
-    ENV_NAME = "Hopper-v4"
+    ENV_NAME = "Hopper-v5"
 
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름

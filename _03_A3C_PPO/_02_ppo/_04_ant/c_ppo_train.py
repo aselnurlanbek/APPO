@@ -507,7 +507,7 @@ class PPO:
 
 def main() -> None:
     print("TORCH VERSION:", torch.__version__)
-    ENV_NAME = "Ant-v4"
+    ENV_NAME = "Ant-v5"
 
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름
