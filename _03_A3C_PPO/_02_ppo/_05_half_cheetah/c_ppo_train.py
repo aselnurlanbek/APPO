@@ -369,6 +369,7 @@ def worker_loop(
             advantages = (advantages - torch.mean(advantages)) / (torch.std(advantages) + 1e-7)
 
             old_mu, old_std = self.local_actor.forward(observations)
+            old_std = torch.nn.functional.softplus(old_std)
             old_dist = Normal(old_mu, old_std)
             old_action_log_probs = old_dist.log_prob(value=actions).sum(dim=-1)
 
@@ -380,10 +381,12 @@ def worker_loop(
 
                 self.local_critic_optimizer.zero_grad()
                 critic_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.local_critic.parameters(), max_norm=1.0)
                 self.local_critic_optimizer.step()
 
                 # Actor Loss computing
                 mu, std = self.local_actor.forward(observations)
+                std = torch.nn.functional.softplus(std)
                 dist = Normal(mu, std)
                 action_log_probs = dist.log_prob(value=actions).sum(dim=-1)
 
@@ -403,6 +406,7 @@ def worker_loop(
                 # Actor Update
                 self.local_actor_optimizer.zero_grad()
                 actor_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.local_actor.parameters(), max_norm=1.0)
                 self.local_actor_optimizer.step()
 
             # Calculate the difference between updated and initial local parameters #change name of the variable
