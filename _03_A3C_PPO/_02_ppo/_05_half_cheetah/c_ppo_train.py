@@ -52,6 +52,12 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.csv_file = open(self.csv_filepath, mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
 
+            # Master CSV setup
+            self.master_csv_filepath = os.path.join(CSV_DIR, "master_processor.csv")
+            self.master_csv_file = open(self.master_csv_filepath, mode='w', newline='')
+            self.master_csv_writer = csv.writer(self.master_csv_file)
+            self.master_csv_writer.writerow(["Total Process Time", "Total Reward"])
+
             # Write CSV headers
             self.csv_writer.writerow([
                 "Validation Episode Reward Average", "Training Episode Reward",
@@ -93,6 +99,11 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                         self.model_save(validation_episode_reward_avg)
                         self.shared_stat.is_terminated.value = 1  # break
 
+
+                    # Log total process time and reward to master CSV
+                    self.master_csv_writer.writerow([total_training_time, validation_episode_reward_avg])
+                    self.master_csv_file.flush()
+
                     self.global_lock.release()
 
                 wandb_log_conditions = [
@@ -113,7 +124,8 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     if self.wandb:
                         for _ in range(5):
                             self.log_wandb(validation_episode_reward_avg)
-                    self.csv_file.close() # Close CSV file
+                    self.csv_file.close()
+                    self.master_csv_file.close()
                     break
 
         def validate(self) -> tuple[np.ndarray, float]:
@@ -260,11 +272,18 @@ def worker_loop(
 
             self.current_time = datetime.now().astimezone().strftime("%Y-%m-%d_%H-%M-%S")
 
+            # Worker CSV setup
+            self.worker_csv_filepath = os.path.join(CSV_DIR, f"worker_{self.worker_id}_metrics.csv")
+            self.worker_csv_file = open(self.worker_csv_filepath, mode='w', newline='')
+            self.worker_csv_writer = csv.writer(self.worker_csv_file)
+            self.worker_csv_writer.writerow(["Episode", "Process Time", "Episode Reward"])
+
         def train_loop(self) -> None:
             policy_loss = critic_loss = 0.0
 
             for n_episode in range(1, self.max_num_episodes + 1):
                 episode_reward = 0
+                episode_start_time = time.time()
 
                 observation, _ = self.env.reset()
                 done = False
@@ -307,7 +326,13 @@ def worker_loop(
                         "Training Steps: {:5,},".format(self.training_time_steps),
                     )
 
+                # Log to worker CSV
+                episode_process_time = time.time() - episode_start_time
+                self.worker_csv_writer.writerow([n_episode, episode_process_time, episode_reward])
+                self.worker_csv_file.flush()
+
                 if bool(self.shared_stat.is_terminated.value):
+                    self.worker_csv_file.close()
                     break
 
         def train(self) -> tuple[float, float, float, float, float]:
