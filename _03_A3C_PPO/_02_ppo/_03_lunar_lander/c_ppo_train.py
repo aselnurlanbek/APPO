@@ -536,7 +536,7 @@ class PPO:
 
 def main() -> None:
     print("TORCH VERSION:", torch.__version__)
-    ENV_NAME = "LunarLanderContinuous-v2"
+    ENV_NAME = "LunarLanderContinuous-v3"
 
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름
