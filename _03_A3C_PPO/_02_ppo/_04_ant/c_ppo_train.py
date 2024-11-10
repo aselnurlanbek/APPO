@@ -478,8 +478,8 @@ class PPO:
         self.num_workers = min(config["num_workers"], mp.cpu_count() - 1)
 
         # Initialize global models and optimizers
-        self.global_actor = Actor(n_features=111, n_actions=8).share_memory()
-        self.global_critic = Critic(n_features=111).share_memory()
+        self.global_actor = Actor(n_features=105, n_actions=8).share_memory()
+        self.global_critic = Critic(n_features=105).share_memory()
 
         self.global_actor_optimizer = SharedAdam(self.global_actor.parameters(), lr=config["learning_rate"])
         self.global_critic_optimizer = SharedAdam(self.global_critic.parameters(), lr=config["learning_rate"])
