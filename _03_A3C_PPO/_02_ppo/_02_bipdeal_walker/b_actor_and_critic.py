@@ -12,6 +12,10 @@ MODEL_DIR = os.path.join(CURRENT_PATH, "models")
 if not os.path.exists(MODEL_DIR):
     os.mkdir(MODEL_DIR)
 
+CSV_DIR = os.path.join(CURRENT_PATH, "csv")
+if not os.path.exists(CSV_DIR):
+    os.mkdir(CSV_DIR)
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 

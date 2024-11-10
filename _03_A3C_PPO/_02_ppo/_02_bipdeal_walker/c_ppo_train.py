@@ -11,11 +11,12 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import wandb
+import csv
 from torch.distributions import Normal
 from torch.optim import Adam
 
 from a_shared_adam import SharedAdam
-from b_bipedal_walker_actor_and_critic import MODEL_DIR, Actor, Buffer, Critic, Transition
+from b_actor_and_critic import MODEL_DIR, CSV_DIR, Actor, Buffer, Critic, Transition
 
 
 def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
@@ -43,7 +44,29 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.last_global_episode_for_validation = 0
             self.last_global_episode_wandb_log = 0
 
+            # CSV setup
+            csv_filename = "appo_{0}_{1}_workers_{2}.csv".format(
+                self.env_name, self.current_time, config["num_workers"]
+            )
+            self.csv_filepath = os.path.join(CSV_DIR, csv_filename)
+            self.csv_file = open(self.csv_filepath, mode='w', newline='')
+            self.csv_writer = csv.writer(self.csv_file)
+
+            # Master CSV setup
+            self.master_csv_filepath = os.path.join(CSV_DIR, "master_processor.csv")
+            self.master_csv_file = open(self.master_csv_filepath, mode='w', newline='')
+            self.master_csv_writer = csv.writer(self.master_csv_file)
+            self.master_csv_writer.writerow(["Total Process Time", "Total Reward"])
+
+            # Write CSV headers
+            self.csv_writer.writerow([
+                "Validation Episode Reward Average", "Training Episode Reward",
+                "Policy Loss", "Critic Loss", "Average Mu", "Average Std",
+                "Average Action", "Training Episode", "Training Steps"
+            ])
+
         def validate_loop(self):
+            validation_episode_reward_avg = None
             total_train_start_time = time.time()
 
             while True:
@@ -76,6 +99,11 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                         self.model_save(validation_episode_reward_avg)
                         self.shared_stat.is_terminated.value = 1  # break
 
+
+                    # Log total process time and reward to master CSV
+                    self.master_csv_writer.writerow([total_training_time, validation_episode_reward_avg])
+                    self.master_csv_file.flush()
+
                     self.global_lock.release()
 
                 wandb_log_conditions = [
@@ -84,13 +112,17 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     self.shared_stat.global_episodes.value > self.train_num_episodes_before_next_validation,
                 ]
                 if all(wandb_log_conditions):
-                    self.log_wandb(validation_episode_reward_avg)
+                    if validation_episode_reward_avg is not None:
+                        self.log_wandb(validation_episode_reward_avg)
+                    # self.log_wandb(validation_episode_reward_avg)
                     self.last_global_episode_wandb_log = self.shared_stat.global_episodes.value
 
                 if bool(self.shared_stat.is_terminated.value):
                     if self.wandb:
                         for _ in range(5):
                             self.log_wandb(validation_episode_reward_avg)
+                    self.csv_file.close()
+                    self.master_csv_file.close()
                     break
 
         def validate(self) -> tuple[np.ndarray, float]:
@@ -114,28 +146,58 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             return episode_rewards, np.average(episode_rewards)
 
         def log_wandb(self, validation_episode_reward_avg: float) -> None:
-            self.wandb.log(
-                {
-                    "[VALIDATION] Mean Episode Reward ({0} Episodes)".format(
-                        self.validation_num_episodes
-                    ): validation_episode_reward_avg,
-                    "[TRAIN] Episode Reward": self.shared_stat.last_episode_reward.value,
-                    "[TRAIN] Policy Loss": self.shared_stat.last_policy_loss.value,
-                    "[TRAIN] Critic Loss": self.shared_stat.last_critic_loss.value,
-                    "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
-                    "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
-                    "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
-                    "Training Episode": self.shared_stat.global_episodes.value,
-                    "Training Steps": self.shared_stat.global_training_time_steps.value,
-                }
-            )
+            log_data = {
+                "[VALIDATION] Mean Episode Reward ({0} Episodes)".format(
+                    self.validation_num_episodes
+                ): validation_episode_reward_avg,
+                "[TRAIN] Episode Reward": self.shared_stat.last_episode_reward.value,
+                "[TRAIN] Policy Loss": self.shared_stat.last_policy_loss.value,
+                "[TRAIN] Critic Loss": self.shared_stat.last_critic_loss.value,
+                "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
+                "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
+                "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
+                "Training Episode": self.shared_stat.global_episodes.value,
+                "Training Steps": self.shared_stat.global_training_time_steps.value,
+            }
+
+            # self.wandb.log(
+            #     {
+            #         "[VALIDATION] Mean Episode Reward ({0} Episodes)".format(
+            #             self.validation_num_episodes
+            #         ): validation_episode_reward_avg,
+            #         "[TRAIN] Episode Reward": self.shared_stat.last_episode_reward.value,
+            #         "[TRAIN] Policy Loss": self.shared_stat.last_policy_loss.value,
+            #         "[TRAIN] Critic Loss": self.shared_stat.last_critic_loss.value,
+            #         "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
+            #         "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
+            #         "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
+            #         "Training Episode": self.shared_stat.global_episodes.value,
+            #         "Training Steps": self.shared_stat.global_training_time_steps.value,
+            #     }
+            # )
+
+            self.wandb.log(log_data)
+
+            # Log to CSV
+            self.csv_writer.writerow([
+                validation_episode_reward_avg,
+                self.shared_stat.last_episode_reward.value,
+                self.shared_stat.last_policy_loss.value,
+                self.shared_stat.last_critic_loss.value,
+                self.shared_stat.last_avg_mu_v.value,
+                self.shared_stat.last_avg_std_v.value,
+                self.shared_stat.last_avg_action.value,
+                self.shared_stat.global_episodes.value,
+                self.shared_stat.global_training_time_steps.value,
+            ])
+            self.csv_file.flush()
 
         def model_save(self, validation_episode_reward_avg: float) -> None:
-            filename = "bipedal_walker_{0}_{1:4.1f}_{2}.pth".format(self.env_name, validation_episode_reward_avg, self.current_time)
+            filename = "appo_{0}_{1:4.1f}_{2}.pth".format(self.env_name, validation_episode_reward_avg, self.current_time)
             torch.save(self.global_actor.state_dict(), os.path.join(MODEL_DIR, filename))
 
             copyfile(
-                src=os.path.join(MODEL_DIR, filename), dst=os.path.join(MODEL_DIR, "bipedal_walker_{0}_latest.pth".format(self.env_name))
+                src=os.path.join(MODEL_DIR, filename), dst=os.path.join(MODEL_DIR, "appo_{0}_latest.pth".format(self.env_name))
             )
 
     master = PPOMaster(
@@ -207,11 +269,18 @@ def worker_loop(
 
             self.current_time = datetime.now().astimezone().strftime("%Y-%m-%d_%H-%M-%S")
 
+            # Worker CSV setup
+            self.worker_csv_filepath = os.path.join(CSV_DIR, f"worker_{self.worker_id}_metrics.csv")
+            self.worker_csv_file = open(self.worker_csv_filepath, mode='w', newline='')
+            self.worker_csv_writer = csv.writer(self.worker_csv_file)
+            self.worker_csv_writer.writerow(["Episode", "Process Time", "Episode Reward"])
+
         def train_loop(self) -> None:
             policy_loss = critic_loss = 0.0
 
             for n_episode in range(1, self.max_num_episodes + 1):
                 episode_reward = 0
+                episode_start_time = time.time()
 
                 observation, _ = self.env.reset()
                 done = False
@@ -254,7 +323,13 @@ def worker_loop(
                         "Training Steps: {:5,},".format(self.training_time_steps),
                     )
 
+                # Log to worker CSV
+                episode_process_time = time.time() - episode_start_time
+                self.worker_csv_writer.writerow([n_episode, episode_process_time, episode_reward])
+                self.worker_csv_file.flush()
+
                 if bool(self.shared_stat.is_terminated.value):
+                    self.worker_csv_file.close()
                     break
 
         def train(self) -> tuple[float, float, float, float, float]:
@@ -291,8 +366,9 @@ def worker_loop(
             advantages = (advantages - torch.mean(advantages)) / (torch.std(advantages) + 1e-7)
 
             old_mu, old_std = self.local_actor.forward(observations)
+            old_std = torch.nn.functional.softplus(old_std)
             old_dist = Normal(old_mu, old_std)
-            old_action_log_probs = old_dist.log_prob(value=actions).squeeze(dim=-1)
+            old_action_log_probs = old_dist.log_prob(value=actions).sum(dim=-1)
 
             for _ in range(self.ppo_epochs):
                 values = self.local_critic(observations).squeeze(dim=-1)
@@ -302,18 +378,20 @@ def worker_loop(
 
                 self.local_critic_optimizer.zero_grad()
                 critic_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.local_critic.parameters(), max_norm=1.0)
                 self.local_critic_optimizer.step()
 
                 # Actor Loss computing
                 mu, std = self.local_actor.forward(observations)
+                std = torch.nn.functional.softplus(std)
                 dist = Normal(mu, std)
-                action_log_probs = dist.log_prob(value=actions).squeeze(dim=-1)
+                action_log_probs = dist.log_prob(value=actions).sum(dim=-1)
 
                 ratio = torch.exp(action_log_probs - old_action_log_probs.detach())
 
-                ratio_advantages = ratio * advantages.unsqueeze(-1).detach()
+                ratio_advantages = ratio * advantages.detach()
                 clipped_ratio_advantages = (
-                    torch.clamp(ratio, 1 - self.ppo_clip_coefficient, 1 + self.ppo_clip_coefficient) * advantages.unsqueeze(-1).detach()
+                    torch.clamp(ratio, 1 - self.ppo_clip_coefficient, 1 + self.ppo_clip_coefficient) * advantages.detach()
                 )
                 ratio_advantages_sum = torch.min(ratio_advantages, clipped_ratio_advantages).sum()
 
@@ -325,6 +403,7 @@ def worker_loop(
                 # Actor Update
                 self.local_actor_optimizer.zero_grad()
                 actor_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.local_actor.parameters(), max_norm=1.0)
                 self.local_actor_optimizer.step()
 
             # Calculate the difference between updated and initial local parameters #change name of the variable
@@ -408,7 +487,7 @@ class PPO:
 
         if use_wandb:
             current_time = datetime.now().astimezone().strftime("%Y-%m-%d_%H-%M-%S")
-            self.wandb = wandb.init(project="PPO_{0}".format(config["env_name"]), name=current_time, config=config)
+            self.wandb = wandb.init(project="APPO_{0}".format(config["env_name"]), name=current_time, config=config)
         else:
             self.wandb = None
 
@@ -470,7 +549,7 @@ def main() -> None:
         "print_episode_interval": 10,                       # Episode 통계 출력에 관한 에피소드 간격
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
-        "episode_reward_avg_solved": 240,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
+        "episode_reward_avg_solved": 300,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
     }
 
     use_wandb = True
