@@ -241,3 +241,5 @@ fabric.properties
 **/models
 .idea
 **/csv
+**/train_data
+
