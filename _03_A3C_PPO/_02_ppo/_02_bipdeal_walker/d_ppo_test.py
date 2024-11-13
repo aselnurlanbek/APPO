@@ -3,7 +3,7 @@ import os
 
 import gymnasium as gym
 import torch
-from b_bipedal_walker_actor_and_critic import MODEL_DIR, Actor
+from b_actor_and_critic import MODEL_DIR, Actor
 
 
 def test(env: gym.Env, actor: Actor, num_episodes: int) -> None:
@@ -34,7 +34,7 @@ def main_play(num_episodes: int, env_name: gym.Env) -> None:
     env = gym.make(env_name, render_mode="human")
 
     actor = Actor(n_features=24, n_actions=4)
-    model_params = torch.load(os.path.join(MODEL_DIR, "bipedal_walker_{0}_latest.pth".format(env_name)), weights_only=True)
+    model_params = torch.load(os.path.join(MODEL_DIR, "appo_{0}_latest.pth".format(env_name)), weights_only=True)
     actor.load_state_dict(model_params)
     actor.eval()
 

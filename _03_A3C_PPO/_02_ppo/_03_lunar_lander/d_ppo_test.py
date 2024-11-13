@@ -34,7 +34,7 @@ def main_play(num_episodes: int, env_name: gym.Env) -> None:
     env = gym.make(env_name, render_mode="human")
 
     actor = Actor(n_features=8, n_actions=2)
-    model_params = torch.load(os.path.join(MODEL_DIR, "ppo_{0}_latest.pth".format(env_name)), weights_only=True)
+    model_params = torch.load(os.path.join(MODEL_DIR, "appo_{0}_latest.pth".format(env_name)), weights_only=True)
     actor.load_state_dict(model_params)
     actor.eval()
 
@@ -45,6 +45,6 @@ def main_play(num_episodes: int, env_name: gym.Env) -> None:
 
 if __name__ == "__main__":
     NUM_EPISODES = 3
-    ENV_NAME = "LunarLanderContinuous-v2"
+    ENV_NAME = "LunarLanderContinuous-v3"
 
     main_play(num_episodes=NUM_EPISODES, env_name=ENV_NAME)

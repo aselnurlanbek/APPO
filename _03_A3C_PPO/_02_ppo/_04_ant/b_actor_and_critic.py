@@ -20,7 +20,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
-    def __init__(self, n_features: int = 111, n_actions: int = 8):
+    def __init__(self, n_features: int = 105, n_actions: int = 8):
         super().__init__()
         self.fc1 = nn.Linear(n_features, 256)
         self.fc2 = nn.Linear(256, 256)
@@ -63,7 +63,7 @@ class Critic(nn.Module):
     update. This a Neural Net with 1 hidden layer
     """
 
-    def __init__(self, n_features: int = 111):
+    def __init__(self, n_features: int = 105):
         super().__init__()
         self.fc1 = nn.Linear(n_features, 256)
         self.fc2 = nn.Linear(256, 256)
