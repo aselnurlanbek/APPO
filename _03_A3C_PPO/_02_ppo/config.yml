@@ -1,0 +1,51 @@
+common:
+  models_dir: "models"
+  csv_dir: "csv"
+  plot_dir: "plots"
+  num_workers: 1
+  max_num_episodes: 200_000
+  ppo_epochs: 10
+  ppo_clip_coefficient: 0.2
+  batch_size: 64
+  learning_rate: 0.0003
+  gamma: 0.99
+  entropy_beta: 0.01
+  print_episode_interval: 10
+  train_num_episodes_before_next_validation: 50
+  validation_num_episodes: 3
+ant:
+  env_name: "Ant-v5"
+  n_features: 105
+  n_actions: 8
+  std_min: 0.1
+  std_max: 2.0
+  episode_reward_avg_solved: 6000
+hopper:
+  env_name: "Hopper-v5"
+  n_features: 11
+  n_actions: 3
+  std_min: 0.1
+  std_max: 2.0
+  episode_reward_avg_solved: 3000
+bipedalWalker:
+  env_name: "BipedalWalker-v3"
+  n_features: 24
+  n_actions: 4
+  std_min: 0.1
+  std_max: 2.0
+  episode_reward_avg_solved: 250
+lunarLander:
+  env_name: "LunarLanderContinuous-v3"
+  n_features: 8
+  n_actions: 2
+  std_min: 0.1
+  std_max: 2.0
+  episode_reward_avg_solved: 200
+halfCheetah:
+  env_name: "HalfCheetah-v5"
+  n_features: 17
+  n_actions: 6
+  std_min: 0.1
+  std_max: 2.0
+  episode_reward_avg_solved: 3000
+
