@@ -13,6 +13,7 @@ common:
   print_episode_interval: 10
   train_num_episodes_before_next_validation: 50
   validation_num_episodes: 3
+  validation_time_steps_interval: 100
 ant:
   env_name: "Ant-v5"
   n_features: 105
@@ -20,6 +21,7 @@ ant:
   std_min: 0.1
   std_max: 2.0
   episode_reward_avg_solved: 6000
+  grad_max_norm: 2.0
 hopper:
   env_name: "Hopper-v5"
   n_features: 11
@@ -27,6 +29,7 @@ hopper:
   std_min: 0.1
   std_max: 2.0
   episode_reward_avg_solved: 3000
+  grad_max_norm: 2.0
 bipedalWalker:
   env_name: "BipedalWalker-v3"
   n_features: 24
@@ -34,6 +37,7 @@ bipedalWalker:
   std_min: 0.1
   std_max: 2.0
   episode_reward_avg_solved: 250
+  grad_max_norm: 1.0
 lunarLander:
   env_name: "LunarLanderContinuous-v3"
   n_features: 8
@@ -41,6 +45,7 @@ lunarLander:
   std_min: 0.1
   std_max: 2.0
   episode_reward_avg_solved: 200
+  grad_max_norm: 1.0
 halfCheetah:
   env_name: "HalfCheetah-v5"
   n_features: 17
@@ -48,4 +53,5 @@ halfCheetah:
   std_min: 0.1
   std_max: 2.0
   episode_reward_avg_solved: 3000
+  grad_max_norm: 2.0
 

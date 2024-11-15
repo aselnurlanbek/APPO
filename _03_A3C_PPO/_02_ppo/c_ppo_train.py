@@ -46,7 +46,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.test_env = test_env
             self.global_lock = global_lock
 
-            self.train_num_episodes_before_next_validation = config["train_num_episodes_before_next_validation"]
+            self.validation_time_steps_interval = config["validation_time_steps_interval"]
             self.validation_num_episodes = config["validation_num_episodes"]
             self.episode_reward_avg_solved = config["episode_reward_avg_solved"]
 
@@ -83,7 +83,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             while True:
                 validation_conditions = [
                     self.shared_stat.global_episodes.value != 0,
-                    self.shared_stat.global_episodes.value % self.train_num_episodes_before_next_validation == 0,
+                    self.shared_stat.global_episodes.value % self.validation_time_steps_interval == 0,
                     self.shared_stat.global_episodes.value > self.last_global_episode_for_validation
                 ]
                 if all(validation_conditions):
@@ -120,7 +120,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                 wandb_log_conditions = [
                     self.wandb,
                     self.shared_stat.global_episodes.value > self.last_global_episode_wandb_log,
-                    self.shared_stat.global_episodes.value > self.train_num_episodes_before_next_validation,
+                    self.shared_stat.global_episodes.value > self.validation_time_steps_interval,
                 ]
                 if all(wandb_log_conditions):
                     if validation_episode_reward_avg is not None:
@@ -170,22 +170,6 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                 "Training Episode": self.shared_stat.global_episodes.value,
                 "Training Steps": self.shared_stat.global_training_time_steps.value,
             }
-
-            # self.wandb.log(
-            #     {
-            #         "[VALIDATION] Mean Episode Reward ({0} Episodes)".format(
-            #             self.validation_num_episodes
-            #         ): validation_episode_reward_avg,
-            #         "[TRAIN] Episode Reward": self.shared_stat.last_episode_reward.value,
-            #         "[TRAIN] Policy Loss": self.shared_stat.last_policy_loss.value,
-            #         "[TRAIN] Critic Loss": self.shared_stat.last_critic_loss.value,
-            #         "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
-            #         "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
-            #         "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
-            #         "Training Episode": self.shared_stat.global_episodes.value,
-            #         "Training Steps": self.shared_stat.global_training_time_steps.value,
-            #     }
-            # )
 
             self.wandb.log(log_data)
 
@@ -271,6 +255,7 @@ def worker_loop(
             self.gamma = config["gamma"]
             self.entropy_beta = config["entropy_beta"]
             self.print_episode_interval = config["print_episode_interval"]
+            self.grad_max_norm = config["grad_max_norm"]
 
             self.buffer = Buffer()
 
@@ -389,7 +374,7 @@ def worker_loop(
 
                 self.local_critic_optimizer.zero_grad()
                 critic_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.local_critic.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(self.local_critic.parameters(), max_norm=self.grad_max_norm)
                 self.local_critic_optimizer.step()
 
                 # Actor Loss computing
@@ -414,7 +399,7 @@ def worker_loop(
                 # Actor Update
                 self.local_actor_optimizer.zero_grad()
                 actor_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.local_actor.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(self.local_actor.parameters(), max_norm=self.grad_max_norm)
                 self.local_actor_optimizer.step()
 
             # Calculate the difference between updated and initial local parameters #change name of the variable
