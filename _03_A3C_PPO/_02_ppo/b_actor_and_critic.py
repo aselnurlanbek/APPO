@@ -1,5 +1,4 @@
 import collections
-import os
 
 import numpy as np
 import torch
@@ -7,24 +6,14 @@ import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Normal
 
-# CURRENT_PATH = os.path.dirname(os.path.realpath(__file__))
-# MODEL_DIR = os.path.join(CURRENT_PATH, "models")
-# if not os.path.exists(MODEL_DIR):
-#     os.mkdir(MODEL_DIR)
-#
-# CSV_DIR = os.path.join(CURRENT_PATH, "csv")
-# if not os.path.exists(CSV_DIR):
-#     os.mkdir(CSV_DIR)
-
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
     def __init__(self, n_features: int = 24, n_actions: int = 4):
         super().__init__()
-        self.fc1 = nn.Linear(n_features, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
+        self.fc1 = nn.Linear(n_features, 128)
+        self.fc2 = nn.Linear(128, 128)
         self.mu = nn.Linear(128, n_actions)
 
         # ln_e(x) = 1.0 --> x = e^1.0 = 2.71
@@ -37,7 +26,6 @@ class Actor(nn.Module):
             x = torch.tensor(x, dtype=torch.float32, device=DEVICE)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
         mu_v = F.tanh(self.mu(x))
 
         std_v = self.log_std.exp()
@@ -66,18 +54,16 @@ class Critic(nn.Module):
 
     def __init__(self, n_features: int = 24):
         super().__init__()
-        self.fc1 = nn.Linear(n_features, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(n_features, 128)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if isinstance(x, np.ndarray):
             x = torch.tensor(x, dtype=torch.float32, device=DEVICE)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.fc3(x)
         return x
 
 
