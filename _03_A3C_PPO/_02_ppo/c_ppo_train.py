@@ -55,6 +55,8 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.last_global_episode_for_validation = 0
             self.last_global_episode_wandb_log = 0
 
+            self.last_time_step_for_validation = 0
+
             # CSV setup
             csv_filename = "appo_{0}_{1}_workers_{2}.csv".format(
                 self.env_name, self.current_time, config["num_workers"]
@@ -82,12 +84,12 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
             while True:
                 validation_conditions = [
-                    self.shared_stat.global_episodes.value != 0,
-                    self.shared_stat.global_episodes.value % self.validation_time_steps_interval == 0,
-                    self.shared_stat.global_episodes.value > self.last_global_episode_for_validation
+                    self.shared_stat.global_time_steps.value != 0,
+                    self.shared_stat.global_time_steps.value % self.validation_time_steps_interval == 0,
+                    self.shared_stat.global_time_steps.value > self.last_time_step_for_validation
                 ]
                 if all(validation_conditions):
-                    self.last_global_episode_for_validation = self.shared_stat.global_episodes.value
+                    self.last_time_step_for_validation = self.shared_stat.global_time_steps.value
 
                     self.global_lock.acquire()
                     validation_episode_reward_lst, validation_episode_reward_avg = self.validate()
@@ -104,12 +106,12 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     if validation_episode_reward_avg > self.episode_reward_avg_solved:
                         print(
                             "Solved in {0:,} time steps ({1:,} training steps)!".format(
-                                self.shared_stat.global_time_steps.value, self.shared_stat.global_training_time_steps.value
+                                self.shared_stat.global_time_steps.value,
+                                self.shared_stat.global_training_time_steps.value
                             )
                         )
                         self.model_save(validation_episode_reward_avg)
                         self.shared_stat.is_terminated.value = 1  # break
-
 
                     # Log total process time and reward to master CSV
                     self.master_csv_writer.writerow([total_training_time, validation_episode_reward_avg])
@@ -119,14 +121,13 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
                 wandb_log_conditions = [
                     self.wandb,
-                    self.shared_stat.global_episodes.value > self.last_global_episode_wandb_log,
-                    self.shared_stat.global_episodes.value > self.validation_time_steps_interval,
+                    self.shared_stat.global_time_steps.value > self.last_time_step_for_validation,
+                    self.shared_stat.global_time_steps.value > self.validation_time_steps_interval,
                 ]
                 if all(wandb_log_conditions):
                     if validation_episode_reward_avg is not None:
                         self.log_wandb(validation_episode_reward_avg)
-                    # self.log_wandb(validation_episode_reward_avg)
-                    self.last_global_episode_wandb_log = self.shared_stat.global_episodes.value
+                    self.last_time_step_for_validation = self.shared_stat.global_time_steps.value
 
                 if bool(self.shared_stat.is_terminated.value):
                     if self.wandb:
@@ -167,7 +168,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                 "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
                 "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
                 "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
-                "Training Episode": self.shared_stat.global_episodes.value,
+                "Training Episode": self.shared_stat.global_time_steps.value,
                 "Training Steps": self.shared_stat.global_training_time_steps.value,
             }
 

@@ -3,7 +3,6 @@ common:
   csv_dir: "csv"
   plot_dir: "plots"
   num_workers: 1
-  max_num_episodes: 200_000
   ppo_epochs: 10
   ppo_clip_coefficient: 0.2
   batch_size: 64
@@ -22,6 +21,7 @@ ant:
   std_max: 2.0
   episode_reward_avg_solved: 6000
   grad_max_norm: 2.0
+  max_num_episodes: 600_000
 hopper:
   env_name: "Hopper-v5"
   n_features: 11
@@ -30,6 +30,7 @@ hopper:
   std_max: 2.0
   episode_reward_avg_solved: 3000
   grad_max_norm: 2.0
+  max_num_episodes: 500_000
 bipedalWalker:
   env_name: "BipedalWalker-v3"
   n_features: 24
@@ -38,6 +39,7 @@ bipedalWalker:
   std_max: 2.0
   episode_reward_avg_solved: 250
   grad_max_norm: 1.0
+  max_num_episodes: 500_000
 lunarLander:
   env_name: "LunarLanderContinuous-v3"
   n_features: 8
@@ -46,6 +48,7 @@ lunarLander:
   std_max: 2.0
   episode_reward_avg_solved: 200
   grad_max_norm: 1.0
+  max_num_episodes: 200_000
 halfCheetah:
   env_name: "HalfCheetah-v5"
   n_features: 17
@@ -54,4 +57,5 @@ halfCheetah:
   std_max: 2.0
   episode_reward_avg_solved: 3000
   grad_max_norm: 2.0
+  max_num_episodes: 500_000
 
