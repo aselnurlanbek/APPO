@@ -35,7 +35,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.test_env = test_env
             self.global_lock = global_lock
 
-            self.train_num_episodes_before_next_validation = config["train_num_episodes_before_next_validation"]
+            self.validation_time_steps_interval = config["validation_time_steps_interval"]
             self.validation_num_episodes = config["validation_num_episodes"]
             self.episode_reward_avg_solved = config["episode_reward_avg_solved"]
 
@@ -43,6 +43,8 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
             self.last_global_episode_for_validation = 0
             self.last_global_episode_wandb_log = 0
+
+            self.last_time_step_for_validation = 0
 
             # CSV setup
             csv_filename = "appo_{0}_{1}_workers_{2}.csv".format(
@@ -71,12 +73,12 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
             while True:
                 validation_conditions = [
-                    self.shared_stat.global_episodes.value != 0,
-                    self.shared_stat.global_episodes.value % self.train_num_episodes_before_next_validation == 0,
-                    self.shared_stat.global_episodes.value > self.last_global_episode_for_validation
+                    self.shared_stat.global_time_steps.value != 0,
+                    self.shared_stat.global_time_steps.value % self.validation_time_steps_interval == 0,
+                    self.shared_stat.global_time_steps.value > self.last_time_step_for_validation
                 ]
                 if all(validation_conditions):
-                    self.last_global_episode_for_validation = self.shared_stat.global_episodes.value
+                    self.last_time_step_for_validation = self.shared_stat.global_time_steps.value
 
                     self.global_lock.acquire()
                     validation_episode_reward_lst, validation_episode_reward_avg = self.validate()
@@ -93,7 +95,8 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     if validation_episode_reward_avg > self.episode_reward_avg_solved:
                         print(
                             "Solved in {0:,} time steps ({1:,} training steps)!".format(
-                                self.shared_stat.global_time_steps.value, self.shared_stat.global_training_time_steps.value
+                                self.shared_stat.global_time_steps.value,
+                                self.shared_stat.global_training_time_steps.value
                             )
                         )
                         self.model_save(validation_episode_reward_avg)
@@ -108,17 +111,13 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
                 wandb_log_conditions = [
                     self.wandb,
-                    self.shared_stat.global_episodes.value > self.last_global_episode_wandb_log,
-                    self.shared_stat.global_episodes.value > self.train_num_episodes_before_next_validation,
+                    self.shared_stat.global_time_steps.value > self.last_time_step_for_validation,
+                    self.shared_stat.global_time_steps.value > self.validation_time_steps_interval,
                 ]
-                # print("validation_conditions", all(validation_conditions))
-                # print("wandb_log_conditions", all(wandb_log_conditions))
-
                 if all(wandb_log_conditions):
                     if validation_episode_reward_avg is not None:
                         self.log_wandb(validation_episode_reward_avg)
-                    # self.log_wandb(validation_episode_reward_avg)
-                    self.last_global_episode_wandb_log = self.shared_stat.global_episodes.value
+                    self.last_time_step_for_validation = self.shared_stat.global_time_steps.value
 
                 if bool(self.shared_stat.is_terminated.value):
                     if self.wandb:
@@ -159,25 +158,9 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                 "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
                 "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
                 "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
-                "Training Episode": self.shared_stat.global_episodes.value,
+                "Training Episode": self.shared_stat.global_time_steps.value,
                 "Training Steps": self.shared_stat.global_training_time_steps.value,
             }
-
-            # self.wandb.log(
-            #     {
-            #         "[VALIDATION] Mean Episode Reward ({0} Episodes)".format(
-            #             self.validation_num_episodes
-            #         ): validation_episode_reward_avg,
-            #         "[TRAIN] Episode Reward": self.shared_stat.last_episode_reward.value,
-            #         "[TRAIN] Policy Loss": self.shared_stat.last_policy_loss.value,
-            #         "[TRAIN] Critic Loss": self.shared_stat.last_critic_loss.value,
-            #         "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
-            #         "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
-            #         "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
-            #         "Training Episode": self.shared_stat.global_episodes.value,
-            #         "Training Steps": self.shared_stat.global_training_time_steps.value,
-            #     }
-            # )
 
             self.wandb.log(log_data)
 
@@ -552,6 +535,7 @@ def main() -> None:
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
         "episode_reward_avg_solved": 200,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
+        "validation_time_steps_interval": 5000
     }
 
     use_wandb = True

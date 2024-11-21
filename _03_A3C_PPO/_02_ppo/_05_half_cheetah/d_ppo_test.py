@@ -45,6 +45,6 @@ def main_play(num_episodes: int, env_name: gym.Env) -> None:
 
 if __name__ == "__main__":
     NUM_EPISODES = 3
-    ENV_NAME = "HalfCheetah-v4"
+    ENV_NAME = "HalfCheetah-v5"
 
     main_play(num_episodes=NUM_EPISODES, env_name=ENV_NAME)
