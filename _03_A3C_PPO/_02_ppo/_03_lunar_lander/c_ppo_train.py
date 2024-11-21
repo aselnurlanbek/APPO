@@ -58,7 +58,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.master_csv_filepath = os.path.join(CSV_DIR, "master_processor.csv")
             self.master_csv_file = open(self.master_csv_filepath, mode='w', newline='')
             self.master_csv_writer = csv.writer(self.master_csv_file)
-            self.master_csv_writer.writerow(["Total Process Time", "Total Reward"])
+            self.master_csv_writer.writerow(["Total Time Steps", "Total Process Time", "Total Reward"])
 
             # Write CSV headers
             self.csv_writer.writerow([
@@ -104,7 +104,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
 
                     # Log total process time and reward to master CSV
-                    self.master_csv_writer.writerow([total_training_time, validation_episode_reward_avg])
+                    self.master_csv_writer.writerow([shared_stat.global_training_time_steps.value, total_training_time, validation_episode_reward_avg])
                     self.master_csv_file.flush()
 
                     self.global_lock.release()
@@ -259,7 +259,7 @@ def worker_loop(
             self.worker_csv_filepath = os.path.join(CSV_DIR, f"worker_{self.worker_id}_metrics.csv")
             self.worker_csv_file = open(self.worker_csv_filepath, mode='w', newline='')
             self.worker_csv_writer = csv.writer(self.worker_csv_file)
-            self.worker_csv_writer.writerow(["Episode", "Process Time", "Episode Reward"])
+            self.worker_csv_writer.writerow(["Time Step", "Process Time", "Validation Reward"])
 
         def train_loop(self) -> None:
             policy_loss = critic_loss = 0.0
@@ -311,7 +311,7 @@ def worker_loop(
 
                 # Log to worker CSV
                 episode_process_time = time.time() - episode_start_time
-                self.worker_csv_writer.writerow([n_episode, episode_process_time, episode_reward])
+                self.worker_csv_writer.writerow([self.training_time_steps, episode_process_time, episode_reward])
                 self.worker_csv_file.flush()
 
                 if bool(self.shared_stat.is_terminated.value):
@@ -523,7 +523,7 @@ def main() -> None:
 
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름
-        "num_workers": 8,                                   # 동시 수행 Worker Process 수
+        "num_workers": 1,                                   # 동시 수행 Worker Process 수
         "max_num_episodes": 200_000,                        # 훈련을 위한 최대 에피소드 횟수
         "ppo_epochs": 10,                                   # PPO 내부 업데이트 횟수
         "ppo_clip_coefficient": 0.2,                        # PPO Ratio Clip Coefficient
@@ -535,7 +535,7 @@ def main() -> None:
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
         "episode_reward_avg_solved": 200,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
-        "validation_time_steps_interval": 5000
+        "validation_time_steps_interval": 10000
     }
 
     use_wandb = True
