@@ -35,7 +35,7 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.test_env = test_env
             self.global_lock = global_lock
 
-            self.train_num_episodes_before_next_validation = config["train_num_episodes_before_next_validation"]
+            self.validation_time_steps_interval = config["validation_time_steps_interval"]
             self.validation_num_episodes = config["validation_num_episodes"]
             self.episode_reward_avg_solved = config["episode_reward_avg_solved"]
 
@@ -43,6 +43,8 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
             self.last_global_episode_for_validation = 0
             self.last_global_episode_wandb_log = 0
+
+            self.last_time_step_for_validation = 0
 
             # CSV setup
             csv_filename = "appo_{0}_{1}_workers_{2}.csv".format(
@@ -56,13 +58,13 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
             self.master_csv_filepath = os.path.join(CSV_DIR, "master_processor.csv")
             self.master_csv_file = open(self.master_csv_filepath, mode='w', newline='')
             self.master_csv_writer = csv.writer(self.master_csv_file)
-            self.master_csv_writer.writerow(["Total Process Time", "Total Reward"])
+            self.master_csv_writer.writerow(["Total Time Steps", "Total Process Time", "Total Reward"])
 
             # Write CSV headers
             self.csv_writer.writerow([
                 "Validation Episode Reward Average", "Training Episode Reward",
                 "Policy Loss", "Critic Loss", "Average Mu", "Average Std",
-                "Average Action", "Training Episode", "Training Steps"
+                "Average Action", "Training Time Steps", "Training Steps"
             ])
 
         def validate_loop(self):
@@ -71,12 +73,12 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
             while True:
                 validation_conditions = [
-                    self.shared_stat.global_episodes.value != 0,
-                    self.shared_stat.global_episodes.value % self.train_num_episodes_before_next_validation == 0,
-                    self.shared_stat.global_episodes.value > self.last_global_episode_for_validation
+                    self.shared_stat.global_time_steps.value != 0,
+                    self.shared_stat.global_time_steps.value % self.validation_time_steps_interval == 0,
+                    self.shared_stat.global_time_steps.value > self.last_time_step_for_validation
                 ]
                 if all(validation_conditions):
-                    self.last_global_episode_for_validation = self.shared_stat.global_episodes.value
+                    self.last_time_step_for_validation = self.shared_stat.global_time_steps.value
 
                     self.global_lock.acquire()
                     validation_episode_reward_lst, validation_episode_reward_avg = self.validate()
@@ -93,7 +95,8 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                     if validation_episode_reward_avg > self.episode_reward_avg_solved:
                         print(
                             "Solved in {0:,} time steps ({1:,} training steps)!".format(
-                                self.shared_stat.global_time_steps.value, self.shared_stat.global_training_time_steps.value
+                                self.shared_stat.global_time_steps.value,
+                                self.shared_stat.global_training_time_steps.value
                             )
                         )
                         self.model_save(validation_episode_reward_avg)
@@ -101,21 +104,20 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
 
 
                     # Log total process time and reward to master CSV
-                    self.master_csv_writer.writerow([total_training_time, validation_episode_reward_avg])
+                    self.master_csv_writer.writerow([shared_stat.global_training_time_steps.value, total_training_time, validation_episode_reward_avg])
                     self.master_csv_file.flush()
 
                     self.global_lock.release()
 
                 wandb_log_conditions = [
                     self.wandb,
-                    self.shared_stat.global_episodes.value > self.last_global_episode_wandb_log,
-                    self.shared_stat.global_episodes.value > self.train_num_episodes_before_next_validation,
+                    self.shared_stat.global_time_steps.value > self.last_time_step_for_validation,
+                    self.shared_stat.global_time_steps.value > self.validation_time_steps_interval,
                 ]
                 if all(wandb_log_conditions):
                     if validation_episode_reward_avg is not None:
                         self.log_wandb(validation_episode_reward_avg)
-                    # self.log_wandb(validation_episode_reward_avg)
-                    self.last_global_episode_wandb_log = self.shared_stat.global_episodes.value
+                    self.last_global_episode_wandb_log = self.shared_stat.global_time_steps.value
 
                 if bool(self.shared_stat.is_terminated.value):
                     if self.wandb:
@@ -156,25 +158,9 @@ def master_loop(global_actor, shared_stat, run_wandb, global_lock, config):
                 "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
                 "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
                 "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
-                "Training Episode": self.shared_stat.global_episodes.value,
+                "Training Time Steps": self.shared_stat.global_time_steps.value,
                 "Training Steps": self.shared_stat.global_training_time_steps.value,
             }
-
-            # self.wandb.log(
-            #     {
-            #         "[VALIDATION] Mean Episode Reward ({0} Episodes)".format(
-            #             self.validation_num_episodes
-            #         ): validation_episode_reward_avg,
-            #         "[TRAIN] Episode Reward": self.shared_stat.last_episode_reward.value,
-            #         "[TRAIN] Policy Loss": self.shared_stat.last_policy_loss.value,
-            #         "[TRAIN] Critic Loss": self.shared_stat.last_critic_loss.value,
-            #         "[TRAIN] avg_mu_v": self.shared_stat.last_avg_mu_v.value,
-            #         "[TRAIN] avg_std_v": self.shared_stat.last_avg_std_v.value,
-            #         "[TRAIN] avg_action": self.shared_stat.last_avg_action.value,
-            #         "Training Episode": self.shared_stat.global_episodes.value,
-            #         "Training Steps": self.shared_stat.global_training_time_steps.value,
-            #     }
-            # )
 
             self.wandb.log(log_data)
 
@@ -273,7 +259,7 @@ def worker_loop(
             self.worker_csv_filepath = os.path.join(CSV_DIR, f"worker_{self.worker_id}_metrics.csv")
             self.worker_csv_file = open(self.worker_csv_filepath, mode='w', newline='')
             self.worker_csv_writer = csv.writer(self.worker_csv_file)
-            self.worker_csv_writer.writerow(["Episode", "Process Time", "Episode Reward"])
+            self.worker_csv_writer.writerow(["Time Step", "Process Time", "Validation Reward"])
 
         def train_loop(self) -> None:
             policy_loss = critic_loss = 0.0
@@ -325,7 +311,7 @@ def worker_loop(
 
                 # Log to worker CSV
                 episode_process_time = time.time() - episode_start_time
-                self.worker_csv_writer.writerow([n_episode, episode_process_time, episode_reward])
+                self.worker_csv_writer.writerow([self.training_time_steps, episode_process_time, episode_reward])
                 self.worker_csv_file.flush()
 
                 if bool(self.shared_stat.is_terminated.value):
@@ -407,7 +393,6 @@ def worker_loop(
                 self.local_actor_optimizer.step()
 
             # Calculate the difference between updated and initial local parameters #change name of the variable
-            # нужно поменять местами вычитание и использовать step()
             delta_local_critic_grads = {
                 name: (initial_local_critic_params[name] - self.local_critic.state_dict()[name]) / self.learning_rate
                 for name in self.local_critic.state_dict()}
@@ -539,7 +524,7 @@ def main() -> None:
     config = {
         "env_name": ENV_NAME,                               # 환경의 이름
         "num_workers": 1,                                   # 동시 수행 Worker Process 수
-        "max_num_episodes": 10_000,                        # 훈련을 위한 최대 에피소드 횟수
+        "max_num_episodes": 200_000,                        # 훈련을 위한 최대 에피소드 횟수
         "ppo_epochs": 10,                                   # PPO 내부 업데이트 횟수
         "ppo_clip_coefficient": 0.2,                        # PPO Ratio Clip Coefficient
         "batch_size": 128,                                  # 훈련시 배치에서 한번에 가져오는 랜덤 배치 사이즈
@@ -550,6 +535,7 @@ def main() -> None:
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
         "episode_reward_avg_solved": 250,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
+        "validation_time_steps_interval": 10000
     }
 
     use_wandb = True
