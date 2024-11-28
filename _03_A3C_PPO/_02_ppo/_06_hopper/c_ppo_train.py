@@ -535,7 +535,7 @@ def main() -> None:
         "train_num_episodes_before_next_validation": 50,   # 검증 사이 마다 각 훈련 episode 간격
         "validation_num_episodes": 3,                       # 검증에 수행하는 에피소드 횟수
         "episode_reward_avg_solved": 3000,                  # 훈련 종료를 위한 테스트 에피소드 리워드의 Average
-        "validation_time_steps_interval": 10000
+        "validation_time_steps_interval": 100_000
     }
 
     use_wandb = True
